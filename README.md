@@ -15,5 +15,5 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
-![tryhackme stats](https://raw.githubusercontent.com/<W0nIE>/<W0nIE>/master/assets/thm_propic.png)
+[tryhackme]: https://tryhackme.com/p/uARBF
 
