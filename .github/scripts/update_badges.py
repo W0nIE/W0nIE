@@ -4,9 +4,12 @@ Data comes from the public profile APIs of TryHackMe, Hack The Box and
 CyberDefenders. Cards are saved to assets/. If one site fails, its old card
 is kept and the others are still updated.
 """
+import base64
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 from html import escape
 
@@ -19,13 +22,25 @@ W, H = 420, 150
 BG, MUTED, TEXT, TRACK = "#1d2230", "#9aa4b8", "#ffffff", "#2e3547"
 
 
-def get_json(url):
+def fetch(url, accept="application/json"):
+    """GET with a few retries: some sites rate-limit GitHub runners (HTTP 429)."""
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (profile-badges; github.com/W0nIE)",
-        "Accept": "application/json",
+        "Accept": accept,
     })
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read())
+    for delay in (5, 20, 60, None):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 502, 503, 504) or delay is None:
+                raise
+            print(f"{url}: HTTP {e.code}, retry in {delay}s")
+            time.sleep(delay)
+
+
+def get_json(url):
+    return json.loads(fetch(url))
 
 
 def card(site, color, user, subtitle, stats, bar_label, bars):
@@ -65,7 +80,20 @@ def save(name, svg):
 
 
 def tryhackme():
-    d = get_json(f"https://tryhackme.com/api/v2/public-profile?username={THM_USER}")["data"]
+    try:
+        d = get_json(f"https://tryhackme.com/api/v2/public-profile?username={THM_USER}")["data"]
+    except Exception as e:
+        # API blocked for the runner: use TryHackMe's official badge image instead,
+        # wrapped in an SVG so the README link stays the same.
+        print(f"TryHackMe API failed ({e}), using official badge image")
+        png = fetch(f"https://tryhackme-badges.s3.amazonaws.com/{THM_USER}.png", "image/png")
+        b64 = base64.b64encode(png).decode()
+        save("tryhackme.svg",
+             f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+             f'<rect width="{W}" height="{H}" rx="10" fill="{BG}"/>'
+             f'<image x="10" y="10" width="{W - 20}" height="{H - 20}" '
+             f'preserveAspectRatio="xMidYMid meet" href="data:image/png;base64,{b64}"/></svg>')
+        return
     top = d.get("topPercentage") or 100
     save("tryhackme.svg", card(
         "TryHackMe", "#88cc14", d["username"], d.get("rank", ""),
