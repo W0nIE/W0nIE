@@ -1,0 +1,42 @@
+name: Update profile badges
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # every day
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and build badges
+        env:
+          THM_USER: uARBF
+          HTB_PROFILE: 019ed138-faa4-7189-85fb-d507a2ac3db8
+          CD_USER: uchik
+        run: python3 .github/scripts/update_badges.py
+
+      - name: Commit if changed
+        run: |
+          git add assets
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update profile badges"
+            git push
+          fi
+
+      # GitHub turns off scheduled workflows after 60 days without activity.
+      # Re-enabling the workflow every run resets that timer.
+      - name: Keep schedule alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable profile-badges.yml --repo "$GITHUB_REPOSITORY"
